@@ -668,10 +668,14 @@ VOID RhelGetDiskGeometry(IN PVOID DeviceExtension)
         adaptExt->info.size_max = PAGE_SIZE;
     }
 
+    /* Issue I: seg_max from device is not bounded against VIRTIO_MAX_SG.
+     * If device reports seg_max > 515, VirtIoBuildIo can overflow srbExt->sg[].
+     * Possible fix: adaptExt->info.seg_max = min(v, VIRTIO_MAX_SG - 1);
+     */
     if (CHECKBIT(adaptExt->features, VIRTIO_BLK_F_SEG_MAX))
     {
         virtio_get_config(&adaptExt->vdev, FIELD_OFFSET(blk_config, seg_max), &v, sizeof(v));
-        adaptExt->info.seg_max = v;
+        adaptExt->info.seg_max = v;  /* Issue I: unbounded, can exceed VIRTIO_MAX_SG */
         RhelDbgPrint(TRACE_LEVEL_INFORMATION, " VIRTIO_BLK_F_SEG_MAX = %d\n", adaptExt->info.seg_max);
     }
 

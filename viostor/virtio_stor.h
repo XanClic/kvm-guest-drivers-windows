@@ -90,6 +90,7 @@ typedef struct VirtIOBufferDescriptor VIO_SG, *PVIO_SG;
 #define BLOCK_SERIAL_STRLEN                20
 
 #define MAX_PHYS_SEGMENTS                  512
+/* Issue I: srbExt->sg[] size; seg_max from device must be bounded to this */
 #define VIRTIO_MAX_SG                      (3 + MAX_PHYS_SEGMENTS)
 
 #define VIOBLK_POOL_TAG                    'BoiV'

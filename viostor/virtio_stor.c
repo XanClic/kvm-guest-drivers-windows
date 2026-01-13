@@ -1485,6 +1485,12 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
             sgOffset = 0;
             while (sgLength > 0)
             {
+                /* Issue I: SGL splitting overflow vulnerability
+                 * Check uses seg_max (device-provided, unbounded) but srbExt->sg[]
+                 * is only VIRTIO_MAX_SG (515) elements. If device reports seg_max > 515,
+                 * this check passes but write below overflows the buffer.
+                 * Also check sgElement >= VIRTIO_MAX_SG, or bound seg_max at init ?
+                 */
                 if (sgElement > adaptExt->info.seg_max)
                 {
                     RhelDbgPrint(TRACE_LEVEL_ERROR, " wrong SGL, the numer of elements or the size is wrong\n");
@@ -1492,6 +1498,7 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                     return FALSE;
                 }
 
+                /* Issue I: potential overflow here if sgElement >= VIRTIO_MAX_SG */
                 srbExt->sg[sgElement].physAddr.QuadPart = sgList->List[i].PhysicalAddress.QuadPart + sgOffset;
                 if (sgLength > adaptExt->info.size_max)
                 {
