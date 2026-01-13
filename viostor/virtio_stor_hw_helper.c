@@ -105,6 +105,7 @@ RhelDoFlush(PVOID DeviceExtension, PSRB_TYPE Srb, BOOLEAN resend, BOOLEAN bIsr)
         }
     }
 
+    /* Issue A (reliability): read without barrier, may see stale value from Reset */
     if (adaptExt->reset_in_progress)
     {
         SRB_SET_DATA_TRANSFER_LENGTH(Srb, 0);
@@ -205,6 +206,7 @@ RhelDoReadWrite(PVOID DeviceExtension, PSRB_TYPE Srb)
         }
     }
 
+    /* Issue A (reliability): read without barrier, may see stale value from Reset */
     if (adaptExt->reset_in_progress)
     {
         SRB_SET_DATA_TRANSFER_LENGTH(Srb, 0);
@@ -354,6 +356,7 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
         }
     }
 
+    /* Issue A (reliability): read without barrier, may see stale value from Reset */
     if (adaptExt->reset_in_progress)
     {
         SRB_SET_DATA_TRANSFER_LENGTH(Srb, 0);
@@ -439,6 +442,7 @@ RhelGetSerialNumber(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
             RhelDbgPrint(TRACE_LEVEL_ERROR, " StorPortGetStartIoPerfParams failed srb %p status 0x%x.\n", Srb, status);
         }
     }
+    /* Issue A (reliability): read without barrier, may see stale value from Reset */
     if (adaptExt->reset_in_progress)
     {
         SRB_SET_DATA_TRANSFER_LENGTH(Srb, 0);

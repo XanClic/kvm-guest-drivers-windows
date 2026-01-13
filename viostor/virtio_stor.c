@@ -848,6 +848,13 @@ VOID CompletePendingRequests(IN PVOID DeviceExtension)
 #ifdef DBG
     RhelDbgPrint(TRACE_LEVEL_INFORMATION, "CompletePendingRequests %d %d\n", adaptExt->srb_cnt, adaptExt->inqueue_cnt);
 #endif
+    /* Issue A: Reset flag race (Reset vs StartIo) - reliability bug, not BSOD
+     * The check-then-set of reset_in_progress is not atomic.
+     * No memory barrier protects this flag - StartIo on another CPU
+     * may see stale FALSE and submit new I/O while reset is in progress.
+     * impact: Extra I/O queued during reset, causes timeout/retry, not corruption.
+     * Might not be real: maybe StorPort serializes reset callbacks.
+     */
     if (!adaptExt->reset_in_progress)
     {
         adaptExt->reset_in_progress = TRUE;
@@ -887,6 +894,7 @@ VOID CompletePendingRequests(IN PVOID DeviceExtension)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR, "RESET IN THE PROGRESS !!!!\n");
     }
+    /* Issue A: cleared without memory barrier, StartIo on other CPUs may see stale TRUE */
     adaptExt->reset_in_progress = FALSE;
 }
 

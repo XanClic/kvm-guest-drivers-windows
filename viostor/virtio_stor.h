@@ -254,7 +254,7 @@ typedef struct _ADAPTER_EXTENSION
     STOR_ADDR_BTL8 device_address;
     blk_discard_write_zeroes blk_discard[16];
     REQUEST_LIST processing_srbs[MAX_CPU];
-    BOOLEAN reset_in_progress;
+    BOOLEAN reset_in_progress;  /* Issue A: Reset vs StartIo race (reliability, not BSOD) */
     ULONGLONG fw_ver;
     ULONG_PTR last_srb_id;
 #ifdef DBG
