@@ -564,6 +564,7 @@ RhelGetLba(IN PVOID DeviceExtension, IN PCDB Cdb)
                 return (ULONGLONG)-1;
             }
     }
+    /* Issue B: returns 512-byte sectors, not logical blocks */
     return (lba.AsULongLong * (adaptExt->info.blk_size / SECTOR_SIZE));
 }
 

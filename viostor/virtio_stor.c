@@ -1400,6 +1400,14 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
             }
     }
 
+    /* Issue B: Boundary check unit mismatch
+     * lba is in 512-byte sectors (from RhelGetLba)
+     * blocks is in logical blocks (blk_size units, e.g., 4KB)
+     * The check (lba + blocks) mixes different units.
+     * With 4KB blocks: lba=984 sectors + blocks=3 logical = 987, but
+     * actual sector range is 984 to 1007 (24 sectors), may exceed lastLBA.
+     * Possible fix: Convert blocks to sectors before comparison.
+     */
     lba = RhelGetLba(DeviceExtension, cdb);
     blocks = (SRB_DATA_TRANSFER_LENGTH(Srb) + adaptExt->info.blk_size - 1) / adaptExt->info.blk_size;
     if (lba > adaptExt->lastLBA - 1)
@@ -1411,6 +1419,7 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         return FALSE;
     }
+    /* Issue B: lba is sectors, blocks is logical blocks - unit mismatch. */
     if ((lba + blocks) > adaptExt->lastLBA)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR,

@@ -109,7 +109,8 @@ typedef struct virtio_blk_config
         u8 heads;
         u8 sectors;
     } geometry;
-    /* block size of device (if VIRTIO_BLK_F_BLK_SIZE) */
+    /* block size of device (if VIRTIO_BLK_F_BLK_SIZE)
+     * Issue B: used to compute logical blocks, but boundary checks mix units */
     u32 blk_size;
     u8 physical_block_exp;
     u8 alignment_offset;
@@ -232,7 +233,7 @@ typedef struct _ADAPTER_EXTENSION
     BOOLEAN sn_ok;
     blk_req vbr;
     BOOLEAN indirect;
-    ULONGLONG lastLBA;
+    ULONGLONG lastLBA;  /* Issue B: in sectors; see VirtIoBuildIo for unit mismatch */
 
     union {
         PCI_COMMON_HEADER pci_config;
