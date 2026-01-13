@@ -336,7 +336,15 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                      BlockDescrCount,
                      blockDescrStartingLba,
                      blockDescrLbaCount);
+        /* Issue v) UNMAP overflow 32-bit (LOW - requires ~2TB discard)
+         * num_sectors is u32, multiplication can overflow with large LbaCount.
+         * With 4KB blocks (multiplier=8), overflow at LbaCount > 0x1FFFFFFF
+         * (~2TB worth of blocks). 64-bit sector field needs even larger values.
+         * Overflow causes wrong sectors to be discarded (data corruption).
+         * use 64 bit math?
+         */
         adaptExt->blk_discard[i].sector = blockDescrStartingLba * (adaptExt->info.blk_size / SECTOR_SIZE);
+        /* Issue v): result truncated to u32, overflow with large LbaCount */
         adaptExt->blk_discard[i].num_sectors = blockDescrLbaCount * (adaptExt->info.blk_size / SECTOR_SIZE);
         adaptExt->blk_discard[i].flags = 0;
     }

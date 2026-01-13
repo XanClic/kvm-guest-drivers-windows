@@ -173,7 +173,8 @@ typedef struct virtio_blk_discard_write_zeroes
 {
     /* discard/write zeroes start sector */
     u64 sector;
-    /* number of discard/write zeroes sectors */
+    /* number of discard/write zeroes sectors
+     * Issue v): 32-bit, can overflow with large LbaCount * blk_size */
     u32 num_sectors;
     /* flags for this range */
     u32 flags;
