@@ -2353,12 +2353,20 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
     }
 
     firmwareRequest = (PFIRMWARE_REQUEST_BLOCK)(srbControl + 1);
+    /* Issue iv) Firmware IOCTL bounds (LOW - malicious userspace)
+     * DataBufferOffset from firmwareRequest is used to compute pointers
+     * without validating it stays within the IOCTL buffer bounds.
+     * A malicious caller can set arbitrary offset causing out-of-bounds
+     * kernel memory access.
+     * Validate (DataBufferOffset + DataBufferLength) <= dataLen?
+     */
     switch (firmwareRequest->Function)
     {
 
         case FIRMWARE_FUNCTION_GET_INFO:
             {
                 PSTORAGE_FIRMWARE_INFO_V2 firmwareInfo;
+                /* Issue iv): DataBufferOffset not validated, can point OOB */
                 firmwareInfo = (PSTORAGE_FIRMWARE_INFO_V2)((PUCHAR)srbControl + firmwareRequest->DataBufferOffset);
                 RhelDbgPrint(TRACE_LEVEL_INFORMATION, " FIRMWARE_FUNCTION_GET_INFO \n");
                 if ((firmwareInfo->Version >= STORAGE_FIRMWARE_INFO_STRUCTURE_VERSION_V2) ||
@@ -2407,6 +2415,7 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
         case FIRMWARE_FUNCTION_DOWNLOAD:
             {
                 PSTORAGE_FIRMWARE_DOWNLOAD_V2 firmwareDwnld;
+                /* Issue iv): DataBufferOffset not validated, can point OOB */
                 firmwareDwnld = (PSTORAGE_FIRMWARE_DOWNLOAD_V2)((PUCHAR)srbControl + firmwareRequest->DataBufferOffset);
                 RhelDbgPrint(TRACE_LEVEL_INFORMATION, " FIRMWARE_FUNCTION_DOWNLOAD \n");
                 if ((firmwareDwnld->Version >= STORAGE_FIRMWARE_DOWNLOAD_STRUCTURE_VERSION_V2) ||
@@ -2431,6 +2440,7 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
         case FIRMWARE_FUNCTION_ACTIVATE:
             {
                 PSTORAGE_FIRMWARE_ACTIVATE firmwareActivate;
+                /* Issue iv): DataBufferOffset not validated, can point OOB */
                 firmwareActivate = (PSTORAGE_FIRMWARE_ACTIVATE)((PUCHAR)srbControl + firmwareRequest->DataBufferOffset);
                 if ((firmwareActivate->Version == STORAGE_FIRMWARE_ACTIVATE_STRUCTURE_VERSION) ||
                     (firmwareActivate->Size >= sizeof(STORAGE_FIRMWARE_ACTIVATE)))
