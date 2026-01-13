@@ -814,6 +814,10 @@ VirtIoHwInitialize(IN PVOID DeviceExtension)
     {
         if (adaptExt->dpc == NULL)
         {
+            /* Issue F: dpc[] has num_queues elements (indices 0 to num_queues-1).
+             * Accessed as dpc[MessageID-1], so MessageID must be 1 to num_queues.
+             * But MESSAGENUMBER_TO_QUEUE can produce MessageID > num_queues.
+             */
             adaptExt->dpc = (PSTOR_DPC)VioStorPoolAlloc(DeviceExtension, sizeof(STOR_DPC) * adaptExt->num_queues);
         }
         if ((adaptExt->dpc != NULL) && (adaptExt->dpc_ok == FALSE))
@@ -2086,6 +2090,7 @@ CompleteDPC(IN PVOID DeviceExtension, IN ULONG MessageID)
 
     if (!adaptExt->dump_mode && adaptExt->dpc_ok)
     {
+        /* Issue F: MessageID can be out of range, see MESSAGENUMBER_TO_QUEUE */
         StorPortIssueDpc(DeviceExtension, &adaptExt->dpc[MessageID - 1], ULongToPtr(MessageID), ULongToPtr(FALSE));
         return TRUE;
     }

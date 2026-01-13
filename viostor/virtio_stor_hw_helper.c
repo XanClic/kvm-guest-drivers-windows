@@ -44,6 +44,15 @@
         pa = va ? StorPortGetPhysicalAddress(DeviceExtension, NULL, va, &len).QuadPart : 0;                            \
     }
 
+/* Issue F: MessageNumber-to-Queue mapping bug
+ * When MessageNumber > num_queues, we wrap QueueNumber but then do
+ * MessageId += 1 which makes MessageId even more out-of-range.
+ * This causes out-of-bounds access to adaptExt->dpc[] array.
+ * Possible fix: Should be MessageId = QueueNumber + 1 after the modulo.
+ *
+ * Issue E: the modulo also causes multiple CPUs to target same queue,
+ * creating a race on last_srb_id++ in VirtIoStartIo.
+ */
 #define MESSAGENUMBER_TO_QUEUE()                                                                                       \
     {                                                                                                                  \
         if (param.MessageNumber != 0)                                                                                  \
@@ -52,8 +61,8 @@
             QueueNumber = MessageId - 1;                                                                               \
             if (QueueNumber >= adaptExt->num_queues)                                                                   \
             {                                                                                                          \
-                QueueNumber %= adaptExt->num_queues;                                                                   \
-                MessageId += 1;                                                                                        \
+                QueueNumber %= adaptExt->num_queues;  /* Issue F: QueueNumber now valid (0 to num_queues-1) */         \
+                MessageId += 1;  /* Issue F: Bug. Should be: MessageId = QueueNumber + 1; */                           \
             }                                                                                                          \
         }                                                                                                              \
     }
@@ -97,7 +106,7 @@ RhelDoFlush(PVOID DeviceExtension, PSRB_TYPE Srb, BOOLEAN resend, BOOLEAN bIsr)
                          QueueNumber,
                          param.MessageNumber,
                          param.ChannelNumber);
-            MESSAGENUMBER_TO_QUEUE();
+            MESSAGENUMBER_TO_QUEUE();  /* Issue F: may produce unbounded MessageId */
         }
         else
         {
@@ -113,6 +122,7 @@ RhelDoFlush(PVOID DeviceExtension, PSRB_TYPE Srb, BOOLEAN resend, BOOLEAN bIsr)
         return TRUE;
     }
 
+    /* Issue F: unbounded MessageId propagates to VioStorVQLock -> dpc[] OOB */
     srbExt->MessageID = MessageId;
     vq = adaptExt->vq[QueueNumber];
 
@@ -131,6 +141,7 @@ RhelDoFlush(PVOID DeviceExtension, PSRB_TYPE Srb, BOOLEAN resend, BOOLEAN bIsr)
     element = &adaptExt->processing_srbs[QueueNumber];
     if (!resend)
     {
+        /* Issue F: unbounded MessageId -> dpc[MessageID-1] OOB in VioStorVQLock */
         VioStorVQLock(DeviceExtension, MessageId, &LockHandle, FALSE);
     }
     if (virtqueue_add_buf(vq, &srbExt->sg[0], srbExt->out, srbExt->in, (void *)srbExt->id, va, pa) ==
@@ -198,7 +209,7 @@ RhelDoReadWrite(PVOID DeviceExtension, PSRB_TYPE Srb)
                          QueueNumber,
                          param.MessageNumber,
                          param.ChannelNumber);
-            MESSAGENUMBER_TO_QUEUE();
+            MESSAGENUMBER_TO_QUEUE();  /* Issue F: may produce unbounded MessageId */
         }
         else
         {
@@ -214,11 +225,13 @@ RhelDoReadWrite(PVOID DeviceExtension, PSRB_TYPE Srb)
         return TRUE;
     }
 
+    /* Issue F: unbounded MessageId propagates to VioStorVQLock -> dpc[] OOB */
     srbExt->MessageID = MessageId;
     vq = adaptExt->vq[QueueNumber];
     RhelDbgPrint(TRACE_LEVEL_VERBOSE, " QueueNumber 0x%x vq = %p\n", QueueNumber, vq);
 
     element = &adaptExt->processing_srbs[QueueNumber];
+    /* Issue F: unbounded MessageId -> dpc[MessageID-1] OOB in VioStorVQLock */
     VioStorVQLock(DeviceExtension, MessageId, &LockHandle, FALSE);
     if (virtqueue_add_buf(vq, &srbExt->sg[0], srbExt->out, srbExt->in, (void *)srbExt->id, va, pa) ==
         VQ_ADD_BUFFER_SUCCESS)
@@ -348,7 +361,7 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                          QueueNumber,
                          param.MessageNumber,
                          param.ChannelNumber);
-            MESSAGENUMBER_TO_QUEUE();
+            MESSAGENUMBER_TO_QUEUE();  /* Issue F: may produce unbounded MessageId */
         }
         else
         {
@@ -364,6 +377,7 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
         return TRUE;
     }
 
+    /* Issue F: unbounded MessageId propagates to VioStorVQLock -> dpc[] OOB */
     srbExt->MessageID = MessageId;
     vq = adaptExt->vq[QueueNumber];
     RhelDbgPrint(TRACE_LEVEL_INFORMATION,
@@ -373,6 +387,7 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                  srbExt->vbr.out_hdr.type);
 
     element = &adaptExt->processing_srbs[QueueNumber];
+    /* Issue F: unbounded MessageId -> dpc[MessageID-1] OOB in VioStorVQLock */
     VioStorVQLock(DeviceExtension, MessageId, &LockHandle, FALSE);
     if (virtqueue_add_buf(vq, &srbExt->sg[0], srbExt->out, srbExt->in, (void *)srbExt->id, va, pa) ==
         VQ_ADD_BUFFER_SUCCESS)
@@ -435,7 +450,7 @@ RhelGetSerialNumber(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                          QueueNumber,
                          param.MessageNumber,
                          param.ChannelNumber);
-            MESSAGENUMBER_TO_QUEUE();
+            MESSAGENUMBER_TO_QUEUE();  /* Issue F: may produce unbounded MessageId */
         }
         else
         {
@@ -450,6 +465,7 @@ RhelGetSerialNumber(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
         return TRUE;
     }
 
+    /* Issue F: unbounded MessageId propagates to VioStorVQLock -> dpc[] OOB */
     srbExt->MessageID = MessageId;
     vq = adaptExt->vq[QueueNumber];
 
@@ -468,6 +484,7 @@ RhelGetSerialNumber(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
     srbExt->sg[2].length = sizeof(srbExt->vbr.status);
 
     element = &adaptExt->processing_srbs[QueueNumber];
+    /* Issue F: unbounded MessageId -> dpc[MessageID-1] OOB in VioStorVQLock */
     VioStorVQLock(DeviceExtension, MessageId, &LockHandle, FALSE);
     if (virtqueue_add_buf(vq, &srbExt->sg[0], srbExt->out, srbExt->in, (void *)srbExt->id, va, pa) ==
         VQ_ADD_BUFFER_SUCCESS)
@@ -736,6 +753,7 @@ VOID VioStorVQLock(IN PVOID DeviceExtension, IN ULONG MessageID, IN OUT PSTOR_LO
 
                 NT_ASSERT(MessageID > 0);
                 NT_ASSERT(MessageID <= adaptExt->num_queues);
+                /* Issue F: MessageID can exceed num_queues, causing OOB access */
                 StorPortAcquireSpinLock(DeviceExtension, DpcLock, &adaptExt->dpc[MessageID - 1], LockHandle);
             }
             else

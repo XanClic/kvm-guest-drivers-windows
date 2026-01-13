@@ -243,7 +243,7 @@ typedef struct _ADAPTER_EXTENSION
     ULONG system_io_bus_number;
     ULONG slot_number;
     ULONG perfFlags;
-    PSTOR_DPC dpc;
+    PSTOR_DPC dpc;  /* Issue F: indexed by MessageID-1; see MESSAGENUMBER_TO_QUEUE bug */
     BOOLEAN dpc_ok;
     BOOLEAN check_condition;  /* Issue D: ISR/DPC race (reliability, not BSOD) */
     /* Issue a2: sense_info race (reliability, not BSOD) - trigger: capacity change.
