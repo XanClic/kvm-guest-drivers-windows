@@ -1784,6 +1784,13 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
     return SrbStatus;
 }
 
+/* Issue iii) REPORT_LUNS overflow (medium - malicious device response)
+ * This function writes to data[3] and assumes 16-byte buffer without
+ * checking SRB_DATA_TRANSFER_LENGTH. Additionally, in code paths that
+ * parse device REPORT_LUNS responses, using REVERSE_BYTES on device-
+ * reported LunListLength without validating against buffer size can
+ * cause buffer overread. Pattern is dangerous when parsing device data.
+ */
 UCHAR
 RhelScsiReportLuns(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 {
@@ -1792,6 +1799,7 @@ RhelScsiReportLuns(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
     UNREFERENCED_PARAMETER(DeviceExtension);
 
+    /* Issue iii): assumes buffer >= 16 bytes, no validation */
     data[3] = 8;
     SRB_SET_SRB_STATUS(Srb, SrbStatus);
     SRB_SET_DATA_TRANSFER_LENGTH(Srb, 16);
