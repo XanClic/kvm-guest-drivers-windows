@@ -1268,6 +1268,13 @@ VirtIoAdapterControl(IN PVOID DeviceExtension, IN SCSI_ADAPTER_CONTROL_TYPE Cont
             {
                 RhelDbgPrint(TRACE_LEVEL_VERBOSE, " ScsiRestartAdapter\n");
                 RhelShutDown(DeviceExtension);
+                /* Issue C: Hot-plug SRB leak - reliability bug, not BSOD
+                 * If VirtIoHwReinitialize fails, we break without completing
+                 * pending SRBs on processing_srbs[] lists. StorPort requires
+                 * all SRBs to eventually complete; failure causes hangs.
+                 * impact: I/O hang or driver power state failure (0x9F), not memory corruption.
+                 * System is already in failed state if reinit fails.
+                 */
                 if (!VirtIoHwReinitialize(DeviceExtension))
                 {
                     RhelDbgPrint(TRACE_LEVEL_FATAL, " ScsiRestartAdapter Cannot reinitialize HW\n");
@@ -1284,6 +1291,7 @@ VirtIoAdapterControl(IN PVOID DeviceExtension, IN SCSI_ADAPTER_CONTROL_TYPE Cont
     return status;
 }
 
+/* Issue C: if this function fails, caller doesn't complete pending SRBs */
 BOOLEAN
 VirtIoHwReinitialize(IN PVOID DeviceExtension)
 {
