@@ -1601,11 +1601,17 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
         UCHAR ScsiStatus = SCSISTAT_CHECK_CONDITION;
         SRB_SET_SCSI_STATUS(((PSRB_TYPE)Srb), ScsiStatus);
     }
+    /* Issue i) VPD buffer overflows (medium - edge case with small buffers)
+     * VPD page handlers write to SRB_DATA_BUFFER without checking if
+     * the caller's buffer (SRB_DATA_TRANSFER_LENGTH) is large enough.
+     * Memory corruption with malicious/buggy userspace?
+     */
     else if ((cdb->CDB6INQUIRY3.PageCode == VPD_SUPPORTED_PAGES) && (cdb->CDB6INQUIRY3.EnableVitalProductData == 1))
     {
 
         PVPD_SUPPORTED_PAGES_PAGE SupportPages;
         SupportPages = (PVPD_SUPPORTED_PAGES_PAGE)SRB_DATA_BUFFER(Srb);
+        /* Issue i): writes up to 6 entries without checking dataLen */
         memset(SupportPages, 0, sizeof(VPD_SUPPORTED_PAGES_PAGE));
         SupportPages->PageCode = VPD_SUPPORTED_PAGES;
         SupportPages->SupportedPageList[0] = VPD_SUPPORTED_PAGES;
@@ -1622,6 +1628,7 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
         }
         SRB_SET_DATA_TRANSFER_LENGTH(Srb, (sizeof(VPD_SUPPORTED_PAGES_PAGE) + SupportPages->PageLength));
     }
+    /* Issue i): no check if dataLen >= sizeof(VPD_SERIAL_NUMBER_PAGE) + serial len */
     else if ((cdb->CDB6INQUIRY3.PageCode == VPD_SERIAL_NUMBER) && (cdb->CDB6INQUIRY3.EnableVitalProductData == 1))
     {
 
