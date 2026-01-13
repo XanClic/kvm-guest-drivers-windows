@@ -2168,6 +2168,7 @@ VOID VioStorCompleteRequest(IN PVOID DeviceExtension, IN ULONG MessageID, IN BOO
     vq = adaptExt->vq[QueueNumber];
     element = &adaptExt->processing_srbs[QueueNumber];
 
+    /* Issue G: when bIsr=TRUE, VioStorVQLock acquires no lock */
     VioStorVQLock(DeviceExtension, MessageID, &queueLock, bIsr);
     do
     {

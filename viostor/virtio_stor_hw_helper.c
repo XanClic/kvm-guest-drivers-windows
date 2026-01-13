@@ -738,6 +738,13 @@ VOID RhelGetDiskGeometry(IN PVOID DeviceExtension)
     }
 }
 
+/* Issue G: ISR completion without lock
+ * When isr=TRUE, this function acquires no lock. The ISR completion path
+ * modifies processing_srbs[].srb_list without synchronization.
+ * It can not be running concurrently since it is either ISR or DPC.
+ * so not a bug but confusing.
+ * worth adding code comments and possibly asserts.
+ */
 VOID VioStorVQLock(IN PVOID DeviceExtension, IN ULONG MessageID, IN OUT PSTOR_LOCK_HANDLE LockHandle, IN BOOLEAN isr)
 {
     PADAPTER_EXTENSION adaptExt;

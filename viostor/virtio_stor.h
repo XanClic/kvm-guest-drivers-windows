@@ -203,7 +203,7 @@ typedef struct _SENSE_INFO
 
 typedef struct _REQUEST_LIST
 {
-    LIST_ENTRY srb_list;
+    LIST_ENTRY srb_list;  /* Issue G: modified without lock in ISR path */
     ULONG srb_cnt;
 } REQUEST_LIST, *PREQUEST_LIST;
 
