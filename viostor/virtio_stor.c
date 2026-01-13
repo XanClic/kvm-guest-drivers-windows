@@ -1195,6 +1195,13 @@ VirtIoInterrupt(IN PVOID DeviceExtension)
         adaptExt->sense_info.senseKey = SCSI_SENSE_UNIT_ATTENTION;
         adaptExt->sense_info.additionalSenseCode = SCSI_ADSENSE_PARAMETERS_CHANGED;
         adaptExt->sense_info.additionalSenseCodeQualifier = SCSI_SENSEQ_CAPACITY_DATA_CHANGED;
+        /* Issue D: check_condition flag race - reliability bug, not BSOD
+         * This flag is set here in ISR context and read/cleared in
+         * CompleteRequestWithStatus (DPC/dispatch context) without any
+         * synchronization. On SMP systems, the DPC may read stale values,
+         * or the clear may race with a concurrent set from another ISR.
+         * impact: Dropped/duplicated sense reporting, not memory corruption.
+         */
         adaptExt->check_condition = TRUE;
         DeviceChangeNotification(DeviceExtension, TRUE);
     }
@@ -1320,6 +1327,7 @@ VirtIoHwReinitialize(IN PVOID DeviceExtension)
         adaptExt->sense_info.senseKey = SCSI_SENSE_DATA_PROTECT;
         adaptExt->sense_info.additionalSenseCode = SCSI_ADSENSE_WRITE_PROTECT;
         adaptExt->sense_info.additionalSenseCodeQualifier = SCSI_SENSEQ_SPACE_ALLOC_FAILED_WRITE_PROTECT; // SCSI_ADSENSE_NO_SENSE;
+        /* Issue D: set without barrier, DPC may miss this */
         adaptExt->check_condition = TRUE;
         DeviceChangeNotification(DeviceExtension, TRUE);
     }
@@ -1539,6 +1547,7 @@ VirtIoMSInterruptRoutine(IN PVOID DeviceExtension, IN ULONG MessageID)
             adaptExt->sense_info.senseKey = SCSI_SENSE_UNIT_ATTENTION;
             adaptExt->sense_info.additionalSenseCode = SCSI_ADSENSE_PARAMETERS_CHANGED;
             adaptExt->sense_info.additionalSenseCodeQualifier = SCSI_SENSEQ_CAPACITY_DATA_CHANGED;
+            /* Issue D: set without barrier, DPC may miss this */
             adaptExt->check_condition = TRUE;
             DeviceChangeNotification(DeviceExtension, TRUE);
             return TRUE;
@@ -1991,6 +2000,7 @@ VOID CompleteRequestWithStatus(IN PVOID DeviceExtension, IN PSRB_TYPE Srb, IN UC
 {
     PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
 
+    /* Issue D: read without barrier, may miss concurrent ISR set */
     if ((SRB_FUNCTION(Srb) == SRB_FUNCTION_EXECUTE_SCSI) && (adaptExt->check_condition == TRUE) &&
         (status == SRB_STATUS_SUCCESS) && (!CHECKFLAG(SRB_FLAGS(Srb), SRB_FLAGS_DISABLE_AUTOSENSE)))
     {
@@ -2004,6 +2014,7 @@ VOID CompleteRequestWithStatus(IN PVOID DeviceExtension, IN PSRB_TYPE Srb, IN UC
                 if (SetSenseInfo(DeviceExtension, Srb))
                 {
                     status = SRB_STATUS_ERROR | SRB_STATUS_AUTOSENSE_VALID;
+                    /* Issue D: clear may race with ISR setting to TRUE */
                     adaptExt->check_condition = FALSE;
                 }
             }

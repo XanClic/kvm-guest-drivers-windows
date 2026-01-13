@@ -245,7 +245,10 @@ typedef struct _ADAPTER_EXTENSION
     ULONG perfFlags;
     PSTOR_DPC dpc;
     BOOLEAN dpc_ok;
-    BOOLEAN check_condition;
+    BOOLEAN check_condition;  /* Issue D: ISR/DPC race (reliability, not BSOD) */
+    /* Issue a2: sense_info race (reliability, not BSOD) - trigger: capacity change.
+     * Written in ISR and dispatch, read in SetSenseInfo without sync.
+     * impact: Inconsistent sense data, not memory corruption. */
     SENSE_INFO sense_info;
     BOOLEAN removed;
     BOOLEAN stopped;
