@@ -1714,6 +1714,7 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
             pageLen = 0x3c;
             REVERSE_BYTES(&LimitsPage->MaximumUnmapLBACount, &max_discard_sectors);
+            /* Issue ii): advertises up to 255 segments, but blk_discard[] is only 16 */
             REVERSE_BYTES(&LimitsPage->MaximumUnmapBlockDescriptorCount, &adaptExt->info.max_discard_seg);
             REVERSE_BYTES(&LimitsPage->OptimalUnmapGranularity, &opt_unmap_granularity);
             REVERSE_BYTES(&LimitsPage->UnmapGranularityAlignment, &discard_sector_alignment);

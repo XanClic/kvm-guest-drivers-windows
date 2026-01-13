@@ -317,6 +317,13 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
 
     BlockDescriptors = (PUNMAP_BLOCK_DESCRIPTOR)((PCHAR)srbDataBuffer + 8);
     BlockDescrCount = blockDescrDataLength / sizeof(UNMAP_BLOCK_DESCRIPTOR);
+    /* Issue ii) blk_discard array bounds
+     * blk_discard[] is fixed at 16 entries but driver advertises up to 255
+     * segments (max_discard_seg from device config). If BlockDescrCount > 16,
+     * this loop overwrites adjacent ADAPTER_EXTENSION fields including
+     * processing_srbs[] pointers, causing memory corruption.
+     * Possible fix: Add bounds check: if (BlockDescrCount > 16) return error?
+     */
     for (i = 0; i < BlockDescrCount; i++)
     {
         ULONGLONG blockDescrStartingLba;
@@ -733,6 +740,7 @@ VOID RhelGetDiskGeometry(IN PVOID DeviceExtension)
         RhelDbgPrint(TRACE_LEVEL_INFORMATION, " max_discard_sectors = %d\n", adaptExt->info.max_discard_sectors);
 
         virtio_get_config(&adaptExt->vdev, FIELD_OFFSET(blk_config, max_discard_seg), &v, sizeof(v));
+        /* Issue ii): caps at 255, but blk_discard[] is only 16 entries */
         adaptExt->info.max_discard_seg = (v < MAX_DISCARD_SEGMENTS) ? v : MAX_DISCARD_SEGMENTS - 1;
         RhelDbgPrint(TRACE_LEVEL_INFORMATION, " max_discard_seg = %d\n", adaptExt->info.max_discard_seg);
     }

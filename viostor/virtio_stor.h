@@ -79,6 +79,7 @@ typedef struct VirtIOBufferDescriptor VIO_SG, *PVIO_SG;
 #define SECTOR_SHIFT                       9
 #define IO_PORT_LENGTH                     0x40
 #define MAX_CPU                            256u
+/* Issue ii): blk_discard[] is only 16 entries, not 256. */
 #define MAX_DISCARD_SEGMENTS               256u
 
 #define VIRTIO_BLK_QUEUE_LAST              MAX_CPU
@@ -256,6 +257,7 @@ typedef struct _ADAPTER_EXTENSION
     PGROUP_AFFINITY pmsg_affinity;
     ULONG num_affinity;
     STOR_ADDR_BTL8 device_address;
+    /* Issue ii): only 16 entries but MAX_DISCARD_SEGMENTS is 256. */
     blk_discard_write_zeroes blk_discard[16];
     /* Issue C: SRBs leaked if VirtIoHwReinitialize fails (reliability, not BSOD) */
     REQUEST_LIST processing_srbs[MAX_CPU];
