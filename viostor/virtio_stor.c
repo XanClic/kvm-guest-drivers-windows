@@ -766,6 +766,7 @@ VirtIoHwInitialize(IN PVOID DeviceExtension)
                                                             adaptExt->num_queues - 1;
                     ASSERT(perfData.lastRedirectionMessageNumber < adaptExt->num_affinity);
                 }
+                /* Issue E: when set, multiple CPUs can call StartIo concurrently */
                 if (CHECKFLAG(perfData.Flags, STOR_PERF_CONCURRENT_CHANNELS))
                 {
                     adaptExt->perfFlags |= STOR_PERF_CONCURRENT_CHANNELS;
@@ -908,6 +909,13 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
 
     adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
     srbExt = SRB_EXTENSION(Srb);
+    /* Issue E: SRB ID duplication race
+     * last_srb_id++ is not atomic. With STOR_PERF_CONCURRENT_CHANNELS and
+     * num_cpus > num_queues, multiple CPUs can target the same queue via
+     * QueueNumber %= num_queues. Two SRBs with duplicate IDs cause wrong
+     * SRB completion -> DMA into reused/freed memory.
+     * Possible fix: Use InterlockedIncrement(&adaptExt->last_srb_id).
+     */
     srbExt->id = adaptExt->last_srb_id;
     adaptExt->last_srb_id++;
     if (adaptExt->last_srb_id == 0)

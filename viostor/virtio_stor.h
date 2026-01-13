@@ -261,7 +261,7 @@ typedef struct _ADAPTER_EXTENSION
     REQUEST_LIST processing_srbs[MAX_CPU];
     BOOLEAN reset_in_progress;  /* Issue A: Reset vs StartIo race (reliability, not BSOD) */
     ULONGLONG fw_ver;
-    ULONG_PTR last_srb_id;
+    ULONG_PTR last_srb_id;  /* Issue E: non-atomic increment causes ID duplication */
 #ifdef DBG
     LONG srb_cnt;
     LONG inqueue_cnt;
