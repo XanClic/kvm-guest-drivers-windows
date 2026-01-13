@@ -845,6 +845,11 @@ VirtIoHwInitialize(IN PVOID DeviceExtension)
     return ret;
 }
 
+/* Issue H: DMA-after-completion vulnerability
+ * This function completes SRBs without calling virtio_device_reset().
+ * Per VirtIO spec, device continues DMA until device_status==0.
+ * Descriptors remain in virtqueue, device may DMA into freed buffers.
+ */
 VOID CompletePendingRequests(IN PVOID DeviceExtension)
 {
     PADAPTER_EXTENSION adaptExt;
@@ -1001,6 +1006,7 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
         case SRB_FUNCTION_RESET_DEVICE:
         case SRB_FUNCTION_RESET_LOGICAL_UNIT:
             {
+                /* Issue H: triggers DMA-after-completion, see CompletePendingRequests */
                 CompletePendingRequests(DeviceExtension);
                 CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_SUCCESS);
 #ifdef DBG
@@ -1224,6 +1230,7 @@ VirtIoInterrupt(IN PVOID DeviceExtension)
     return isInterruptServiced;
 }
 
+/* Issue H: StorPort reset callback - triggers DMA-after-completion */
 BOOLEAN
 VirtIoResetBus(IN PVOID DeviceExtension, IN ULONG PathId)
 {
@@ -1231,6 +1238,7 @@ VirtIoResetBus(IN PVOID DeviceExtension, IN ULONG PathId)
     PADAPTER_EXTENSION adaptExt;
     adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
 
+    /* Issue H: should call virtio_device_reset() first, see RhelShutDown */
     CompletePendingRequests(DeviceExtension);
     return TRUE;
 }
