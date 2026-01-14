@@ -661,9 +661,19 @@ VOID RhelSetGuestFeatures(IN PVOID DeviceExtension)
         guestFeatures |= (1ULL << VIRTIO_F_ORDER_PLATFORM);
     }
 
+    /* Issue a5: Feature negotiation failure silently ignored - reliability bug, not BSOD
+     *
+     * trigger: init time (device rejects features), not under normal I/O load.
+     *
+     * If virtio_set_features fails, function returns but:
+     * adaptExt->features still contains host features (not negotiated)
+     * Device not marked as failed
+     * Driver may use un-negotiated features (e.g., FLUSH)
+     */
     if (!NT_SUCCESS(virtio_set_features(&adaptExt->vdev, guestFeatures)))
     {
         RhelDbgPrint(TRACE_LEVEL_FATAL, " virtio_set_features failed\n");
+        /* Issue a5: returns without clearing adaptExt->features */
         return;
     }
     RhelDbgPrint(TRACE_LEVEL_VERBOSE, " Host Features %llu gust features %llu\n", adaptExt->features, guestFeatures);
