@@ -420,6 +420,10 @@ VirtIoFindAdapter(IN PVOID DeviceExtension,
         ConfigInfo->NumberOfPhysicalBreaks = max(SCSI_MINIMUM_PHYSICAL_BREAKS, (queueLength / 4));
         adaptExt->queue_depth = max(((queueLength / ConfigInfo->NumberOfPhysicalBreaks) - 1), 1);
     }
+    /* Issue a7: seg_max underflow to 0xFFFFFFFF
+     *
+     * If seg_max * size_max < ROUND_TO_PAGES(size_max), division yields 0.
+     * Then seg_max - 1 underflows to 0xFFFFFFFF (ULONG). */
     if (CHECKBIT(adaptExt->features, VIRTIO_BLK_F_SEG_MAX))
     {
         ULONG size_max = adaptExt->info.size_max;
@@ -427,6 +431,7 @@ VirtIoFindAdapter(IN PVOID DeviceExtension,
         if ((size_max > 0) && (seg_max > 0))
         {
             seg_max = (ULONG)((ULONGLONG)seg_max * size_max) / (ROUND_TO_PAGES(size_max));
+            /* Issue a7: underflows if seg_max became 0 from division */
             ConfigInfo->NumberOfPhysicalBreaks = seg_max - 1;
         }
     }
