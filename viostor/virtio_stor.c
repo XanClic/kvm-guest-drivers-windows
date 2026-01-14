@@ -1001,10 +1001,12 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                         break;
                     case StorRemoveDevice:
                     case StorSurpriseRemoval:
+                        /* Issue a3 removed write: set without barrier; ISR on other CPU may not see */
                         adaptExt->removed = TRUE;
                         DeviceChangeNotification(DeviceExtension, FALSE);
                         break;
                     case StorStopDevice:
+                        /* Issue a3 stopped write: set without barrier; ISR on other CPU may not see */
                         adaptExt->stopped = TRUE;
                         break;
                     default:
@@ -1210,6 +1212,8 @@ VirtIoInterrupt(IN PVOID DeviceExtension)
     adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
 
     RhelDbgPrint(TRACE_LEVEL_VERBOSE, " IRQL (%d)\n", KeGetCurrentIrql());
+    /* Issue a3 removed read (ISR): no barrier; may see stale FALSE after PnP sets TRUE,
+     * causing ISR to process interrupt on removed device */
     if (adaptExt->removed == TRUE || adaptExt->stopped == TRUE)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR, " Interrupt on removed or stopped device)");
@@ -1574,6 +1578,7 @@ VirtIoMSInterruptRoutine(IN PVOID DeviceExtension, IN ULONG MessageID)
 {
     PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
 
+    /* Issue a3 read (MSI ISR): no barrier; may see stale FALSE */
     if (MessageID > adaptExt->num_queues || adaptExt->removed == TRUE || adaptExt->stopped == TRUE)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR, " MessageID = %d\n", MessageID);

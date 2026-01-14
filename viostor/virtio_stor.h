@@ -253,6 +253,8 @@ typedef struct _ADAPTER_EXTENSION
      * Written in ISR and dispatch, read in SetSenseInfo without sync.
      * impact: Inconsistent sense data, not memory corruption. */
     SENSE_INFO sense_info;
+    /* Issue a3: removed/stopped flags.Read in ISR without barrier.
+     * maybe StorPort PnP serializes teardown vs interrupts? */
     BOOLEAN removed;
     BOOLEAN stopped;
     ULONG max_tx_length;
