@@ -1103,6 +1103,7 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                 if (CHECKBIT(adaptExt->features, VIRTIO_BLK_F_RO))
                 {
                     UCHAR SrbStatus = SRB_STATUS_ERROR;
+                    /* Issue a2 write (dispatch): sense_info written without sync */
                     adaptExt->sense_info.senseKey = SCSI_SENSE_DATA_PROTECT;
                     adaptExt->sense_info.additionalSenseCode = SCSI_ADSENSE_WRITE_PROTECT;
                     adaptExt->sense_info.additionalSenseCodeQualifier = SCSI_SENSEQ_SPACE_ALLOC_FAILED_WRITE_PROTECT; // SCSI_ADSENSE_NO_SENSE;
@@ -1232,6 +1233,8 @@ VirtIoInterrupt(IN PVOID DeviceExtension)
     {
         RhelGetDiskGeometry(DeviceExtension);
         isInterruptServiced = TRUE;
+        /* Issue a2 write (ISR): sense_info written here without sync.
+         * Another CPU reading in SetSenseInfo may get partial update. */
         adaptExt->sense_info.senseKey = SCSI_SENSE_UNIT_ATTENTION;
         adaptExt->sense_info.additionalSenseCode = SCSI_ADSENSE_PARAMETERS_CHANGED;
         adaptExt->sense_info.additionalSenseCodeQualifier = SCSI_SENSEQ_CAPACITY_DATA_CHANGED;
@@ -1594,6 +1597,7 @@ VirtIoMSInterruptRoutine(IN PVOID DeviceExtension, IN ULONG MessageID)
         if (MessageID == VIRTIO_BLK_MSIX_CONFIG_VECTOR)
         {
             RhelGetDiskGeometry(DeviceExtension);
+            /* Issue a2 write (MSI ISR): sense_info written without sync */
             adaptExt->sense_info.senseKey = SCSI_SENSE_UNIT_ATTENTION;
             adaptExt->sense_info.additionalSenseCode = SCSI_ADSENSE_PARAMETERS_CHANGED;
             adaptExt->sense_info.additionalSenseCodeQualifier = SCSI_SENSEQ_CAPACITY_DATA_CHANGED;
@@ -2116,6 +2120,9 @@ SetSenseInfo(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
         UCHAR ScsiStatus = SCSISTAT_CHECK_CONDITION;
         senseInfoBuffer->ErrorCode = SCSI_SENSE_ERRORCODE_FIXED_CURRENT;
         senseInfoBuffer->Valid = 1;
+        /* Issue a2 read: 3 fields read non-atomically from sense_info.
+         * ISR may update between reads, yielding inconsistent sense data
+         * (e.g., UNIT_ATTENTION key with WRITE_PROTECT codes). */
         senseInfoBuffer->SenseKey = adaptExt->sense_info.senseKey;
         senseInfoBuffer->AdditionalSenseLength = sizeof(SENSE_DATA) -
                                                  FIELD_OFFSET(SENSE_DATA, AdditionalSenseLength); // 0xb ??
