@@ -289,6 +289,9 @@ typedef struct _SRB_EXTENSION
     BOOLEAN fua;
     ULONG_PTR id;
     VIO_SG sg[VIRTIO_MAX_SG];
+    /* Issue J: Indirect descriptor table for DMA. Device reads
+     * (out+in)*16 bytes from physical address. If SRB extensions are NOT
+     * guaranteed contiguous, this could span non-adjacent physical pages. */
     VRING_DESC_ALIAS desc[VIRTIO_MAX_SG];
 } SRB_EXTENSION, *PSRB_EXTENSION;
 

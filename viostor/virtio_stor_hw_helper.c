@@ -37,11 +37,28 @@
 #include "virtio_stor_hw_helper.tmh"
 #endif
 
+/* Issue J: Indirect descriptor table physical contiguity - uncertain
+ *
+ * This needs verification. SRB extensions are documented as DMAable
+ * may imply physical contiguity.
+ *
+ * If not physically contiguous, this is a bug:
+ *
+ * StorPortGetPhysicalAddress(va, &len) returns:
+ *   - pa: physical address of va
+ *   - len: number of bytes physically contiguous starting at pa
+ *
+ * The code retrieves 'len' but never checks it. srbExt->desc is 8KB,
+ * spanning 2+ pages. If pages are non-contiguous, device reads garbage.
+ *
+ * If SRB extensions are guaranteed contiguous, this is not a bug.
+ */
 #define SET_VA_PA()                                                                                                    \
     {                                                                                                                  \
-        ULONG len;                                                                                                     \
+        ULONG len;  /* Issue J: contiguous length - retrieved but not validated */                                  \
         va = adaptExt->indirect ? srbExt->desc : NULL;                                                                 \
         pa = va ? StorPortGetPhysicalAddress(DeviceExtension, NULL, va, &len).QuadPart : 0;                            \
+        /* Issue J (uncertain): should check len >= (srbExt->out + srbExt->in) * 16 */                                \
     }
 
 /* Issue F: MessageNumber-to-Queue mapping bug
@@ -144,6 +161,7 @@ RhelDoFlush(PVOID DeviceExtension, PSRB_TYPE Srb, BOOLEAN resend, BOOLEAN bIsr)
         /* Issue F: unbounded MessageId -> dpc[MessageID-1] OOB in VioStorVQLock */
         VioStorVQLock(DeviceExtension, MessageId, &LockHandle, FALSE);
     }
+    /* Issue J: pa may point to non-contiguous memory; see SET_VA_PA */
     if (virtqueue_add_buf(vq, &srbExt->sg[0], srbExt->out, srbExt->in, (void *)srbExt->id, va, pa) ==
         VQ_ADD_BUFFER_SUCCESS)
     {

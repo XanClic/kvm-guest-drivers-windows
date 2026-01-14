@@ -171,6 +171,9 @@ DriverEntry(IN PVOID DriverObject, IN PVOID RegistryPath)
     hwInitData.MultipleRequestPerLu = TRUE;
 
     hwInitData.DeviceExtensionSize = sizeof(ADAPTER_EXTENSION);
+    /* Issue J: SRB_EXTENSION contains desc[VIRTIO_MAX_SG] (~8KB)
+     * used as indirect descriptor table for DMA. Whether StorPort guarantees
+     * physical contiguity for SRB extensions is unclear - see SET_VA_PA. */
     hwInitData.SrbExtensionSize = sizeof(SRB_EXTENSION);
 
     hwInitData.AdapterInterfaceType = PCIBus;

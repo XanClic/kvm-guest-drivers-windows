@@ -252,6 +252,10 @@ virtqueue_add_buf_split(struct virtqueue *_vq,   /* the queue */
         idx = get_unused_desc(vq);
         vq->vring.desc[idx].flags = VIRTQ_DESC_F_INDIRECT;
         vq->vring.desc[idx].addr = phys_indirect;
+        /* Issue J: SET_VA_PA ignores contiguous length. 
+         * i = out + in = number of SG entries. Device will DMA-read
+         * i * 16 bytes from phys_indirect. Caller must ensure phys_indirect
+         * points to at least this many physically contiguous bytes. */
         vq->vring.desc[idx].len = i * sizeof(struct vring_desc);
 
         vq->opaque[idx] = opaque;
