@@ -1729,6 +1729,8 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
         /* Issue a6: writes without checking dataLen */
         memset(IdentificationDescr, 0, sizeof(VPD_IDENTIFICATION_DESCRIPTOR));
 
+        /* Issue a8 read: no barrier; concurrent requests may both see FALSE
+         * and issue duplicate GET_ID requests */
         if (!adaptExt->sn_ok)
         {
             if (!RhelGetSerialNumber(DeviceExtension, Srb))
@@ -2279,6 +2281,7 @@ VOID VioStorCompleteRequest(IN PVOID DeviceExtension, IN ULONG MessageID, IN BOO
 
             if (bFound && srbExt->vbr.out_hdr.type == VIRTIO_BLK_T_GET_ID)
             {
+                /* Issue a8 write: set without barrier; other CPUs may not see */
                 adaptExt->sn_ok = TRUE;
                 if (Srb)
                 {
