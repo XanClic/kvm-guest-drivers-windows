@@ -2399,12 +2399,20 @@ VOID LogError(IN PVOID DeviceExtension, IN ULONG ErrorCode, IN ULONG UniqueId)
     StorPortLogSystemEvent(DeviceExtension, &logEvent, NULL);
 }
 
+/* Issue L: VioStorPoolAlloc Integer Overflow
+ * The bounds check (poolOffset + size) <= poolAllocationSize can overflow
+ * if poolOffset + size wraps around ULONG_MAX, at least in theory. The
+ * condition then incorrectly evaluates to true, allowing writes beyond the
+ * allocated buffer. The ULONG cast below can also thinkably truncate on 64-bit.
+ * Easiest fix probably to do all math in 64 bit.
+ */
 PVOID
 VioStorPoolAlloc(IN PVOID DeviceExtension, IN SIZE_T size)
 {
     PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
     PVOID ptr = (PVOID)((ULONG_PTR)adaptExt->poolAllocationVa + adaptExt->poolOffset);
 
+    /* Issue L: overflow possible here */
     if ((adaptExt->poolOffset + size) <= adaptExt->poolAllocationSize)
     {
         size = ROUND_TO_CACHE_LINES(size);
