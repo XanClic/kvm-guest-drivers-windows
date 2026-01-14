@@ -361,8 +361,10 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
          * Overflow causes wrong sectors to be discarded (data corruption).
          * use 64 bit math?
          */
+        /* Issue a1: divide-by-zero if blk_size < SECTOR_SIZE */
         adaptExt->blk_discard[i].sector = blockDescrStartingLba * (adaptExt->info.blk_size / SECTOR_SIZE);
-        /* Issue v): result truncated to u32, overflow with large LbaCount */
+        /* Issue v): result truncated to u32, overflow with large LbaCount
+         * Issue a1: divide-by-zero if blk_size < SECTOR_SIZE */
         adaptExt->blk_discard[i].num_sectors = blockDescrLbaCount * (adaptExt->info.blk_size / SECTOR_SIZE);
         adaptExt->blk_discard[i].flags = 0;
     }
@@ -654,6 +656,7 @@ RhelGetSectors(IN PVOID DeviceExtension, IN PCDB Cdb)
                 return (ULONGLONG)-1;
             }
     }
+    /* Issue a1: divide-by-zero if blk_size < SECTOR_SIZE */
     return (sector.AsULong * (adaptExt->info.blk_size / SECTOR_SIZE));
 }
 
@@ -700,6 +703,14 @@ VOID RhelGetDiskGeometry(IN PVOID DeviceExtension)
     if (CHECKBIT(adaptExt->features, VIRTIO_BLK_F_BLK_SIZE))
     {
         virtio_get_config(&adaptExt->vdev, FIELD_OFFSET(blk_config, blk_size), &v, sizeof(v));
+    /* Issue a1: blk_size<512 divide-by-zero vulnerability
+     *
+     * blk_size read from device config without validation.
+     * If device provides blk_size < SECTOR_SIZE (512),
+     * we get divisions by 0.
+     * Validate blk_size >= SECTOR_SIZE after read?
+     * And maybe a multiple of SECTOR_SIZE.
+     */
         adaptExt->info.blk_size = v;
     }
     else

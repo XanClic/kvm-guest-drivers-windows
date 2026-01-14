@@ -1470,6 +1470,7 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
      * Possible fix: Convert blocks to sectors before comparison.
      */
     lba = RhelGetLba(DeviceExtension, cdb);
+    /* Issue a1: divide-by-zero if blk_size == 0 */
     blocks = (SRB_DATA_TRANSFER_LENGTH(Srb) + adaptExt->info.blk_size - 1) / adaptExt->info.blk_size;
     if (lba > adaptExt->lastLBA - 1)
     {
@@ -1707,6 +1708,11 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
             return SRB_STATUS_INVALID_REQUEST;
         }
     }
+    /* Issue a6: VPD_DEVICE_IDENTIFIERS buffer overflow
+     *
+     * No bounds check on dataLen before memset/writes. If caller provides
+     * small buffer (e.g., 4 bytes), memset overwrites past buffer end.
+     * Check dataLen >= required size? */
     else if ((cdb->CDB6INQUIRY3.PageCode == VPD_DEVICE_IDENTIFIERS) && (cdb->CDB6INQUIRY3.EnableVitalProductData == 1))
     {
 
@@ -1715,10 +1721,12 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
         UCHAR len = 0;
 
         IdentificationPage = (PVPD_IDENTIFICATION_PAGE)SRB_DATA_BUFFER(Srb);
+        /* Issue a6: writes without checking dataLen */
         memset(IdentificationPage, 0, sizeof(VPD_IDENTIFICATION_PAGE));
         IdentificationPage->PageCode = VPD_DEVICE_IDENTIFIERS;
 
         IdentificationDescr = (PVPD_IDENTIFICATION_DESCRIPTOR)IdentificationPage->Descriptors;
+        /* Issue a6: writes without checking dataLen */
         memset(IdentificationDescr, 0, sizeof(VPD_IDENTIFICATION_DESCRIPTOR));
 
         if (!adaptExt->sn_ok)
@@ -1738,6 +1746,7 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
     {
 
         PVPD_BLOCK_LIMITS_PAGE LimitsPage;
+        /* Issue a1: divide-by-zero if blk_size == 0 */
         ULONG max_io_size = adaptExt->max_tx_length / adaptExt->info.blk_size;
         USHORT pageLen = 0x10;
 
@@ -2000,6 +2009,8 @@ RhelScsiGetCapacity(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
     }
 
     blocksize = adaptExt->info.blk_size;
+    /* Issue a1: divide-by-zero here if blk_size < 512.
+     * (blocksize / SECTOR_SIZE) evaluates to 0. */
     lastLBA = adaptExt->info.capacity / (blocksize / SECTOR_SIZE) - 1;
     adaptExt->lastLBA = adaptExt->info.capacity;
 
