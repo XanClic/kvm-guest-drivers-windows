@@ -550,15 +550,26 @@ VirtIoFindAdapter(IN PVOID DeviceExtension,
     return SP_RETURN_FOUND;
 }
 
+/* Issue b1: DPC Initialization Race with Device Removal
+ * VirtIoPassiveInitializeRoutine() runs asynchronously via
+ * StorPortEnablePassiveInitialization(). If ScsiStopAdapter() is called
+ * concurrently (device hot-unplug), RhelShutDown() may free dpc[] memory
+ * while this function is still accessing adaptExt->dpc[]. The function sets
+ * dpc_ok=TRUE without synchronization - if set after shutdown begins,
+ * subsequent DPC calls access freed memory causing use-after-free BSOD.
+ * Possible fix: Add synchronization between passive init and adapter stop.
+ */
 BOOLEAN
 VirtIoPassiveInitializeRoutine(IN PVOID DeviceExtension)
 {
     ULONG index;
     PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
+    /* Issue b1: race window - dpc[] may be freed by concurrent shutdown */
     for (index = 0; index < adaptExt->num_queues; ++index)
     {
         StorPortInitializeDpc(DeviceExtension, &adaptExt->dpc[index], CompleteDpcRoutine);
     }
+    /* Issue b1: no barrier, shutdown may have started */
     adaptExt->dpc_ok = TRUE;
     return TRUE;
 }
