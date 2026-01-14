@@ -449,6 +449,13 @@ VirtIoFindAdapter(IN PVOID DeviceExtension,
     adaptExt->num_queues = 1;
     if (CHECKBIT(adaptExt->features, VIRTIO_BLK_F_MQ))
     {
+        /* Issue O: Unvalidated Device Config - num_queues
+         * num_queues is read from device config without validation.
+         * A malicious device could provide num_queues=0 (division-by-zero,
+         * infinite loops) or excessive values. While line 469 caps at num_cpus,
+         * num_queues=0 is not caught and can cause issues in queue loops.
+         * Possible fix: Validate num_queues >= 1 immediately after reading.
+         */
         virtio_get_config(&adaptExt->vdev,
                           FIELD_OFFSET(blk_config, num_queues),
                           &adaptExt->num_queues,
