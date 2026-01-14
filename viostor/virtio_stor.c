@@ -854,6 +854,14 @@ VirtIoHwInitialize(IN PVOID DeviceExtension)
              * Accessed as dpc[MessageID-1], so MessageID must be 1 to num_queues.
              * But MESSAGENUMBER_TO_QUEUE can produce MessageID > num_queues.
              */
+            /* Issue M: Missing NULL Check After VioStorPoolAlloc
+             * VioStorPoolAlloc() can return NULL. This allocation
+             * doesn't check for NULL. If allocation fails, dpc is NULL, but
+             * dpc_ok may still be set TRUE in VirtIoPassiveInitializeRoutine().
+             * Later CompleteDPC() does dpc[MessageID-1]
+             * causing NULL pointer dereference BSOD.
+             * Check for NULL and fail?
+             */
             adaptExt->dpc = (PSTOR_DPC)VioStorPoolAlloc(DeviceExtension, sizeof(STOR_DPC) * adaptExt->num_queues);
         }
         if ((adaptExt->dpc != NULL) && (adaptExt->dpc_ok == FALSE))
