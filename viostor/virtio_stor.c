@@ -949,6 +949,13 @@ VOID CompletePendingRequests(IN PVOID DeviceExtension)
         RhelDbgPrint(TRACE_LEVEL_ERROR, "RESET IN THE PROGRESS !!!!\n");
     }
     /* Issue A: cleared without memory barrier, StartIo on other CPUs may see stale TRUE */
+    /* Issue P: Flag is cleared even if this execution thread did not set it,
+     * so it may be cleared while the reset is still going on.  As stated on
+     * issue A, might not be real if StorPort serializes resets, but then the
+     * `if` condition above would be unnecessary.  Same impact as issue A, i.e.
+     * no BSOD, just extra I/O queued and maybe two threads trying to complete
+     * all SRBs above simultaneously (which is OK if `VioStorVQLock()` is a real
+     * critical section lock, which it looks like it is). */
     adaptExt->reset_in_progress = FALSE;
 }
 
