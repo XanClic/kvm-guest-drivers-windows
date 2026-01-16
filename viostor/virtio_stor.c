@@ -1008,6 +1008,9 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                         RhelDbgPrint(TRACE_LEVEL_INFORMATION,
                                      " <--> Unsupport control code 0x%x\n",
                                      srbControl->ControlCode);
+                        /* wrt issue Q (not setting SRB transfer length on
+                         * short transfers): Probably fine, INVALID_REQUEST
+                         * indicates a completely fatal error */
                         break;
                 }
 
@@ -1047,6 +1050,9 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                                      " Unsupported PnPAction SrbPnPFlags = %d, PnPAction = %d\n",
                                      SrbPnPFlags,
                                      PnPAction);
+                        /* wrt issue Q (not setting SRB transfer length to 0):
+                         * Probably fine, this status code indicates a
+                         * completely fatal error. */
                         SrbStatus = SRB_STATUS_INVALID_REQUEST;
                 }
                 CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SrbStatus);
@@ -1085,6 +1091,8 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                 SRB_SET_SRB_STATUS(Srb, SRB_STATUS_PENDING);
                 if (!RhelDoFlush(DeviceExtension, (PSRB_TYPE)Srb, FALSE, FALSE))
                 {
+                    /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+                     * assuming these requests have no data anyway. */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_ERROR);
                 }
                 return TRUE;
@@ -1101,6 +1109,11 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
     if (!cdb)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR, " no CDB (%p) Function %x\n", Srb, SRB_FUNCTION(Srb));
+        /* wrt issue Q: Does not set SRB transfer length to 0.  I assume
+         * SRB_FUNCTION_EXECUTE_SCSI should always be accompanied by a CDB,
+         * i.e. this here is just a safeguard against bugs in Windows, so there
+         * should be no impact in practice.  Also, BAD_FUNCTION indicates a
+         * completely fatal error. */
         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BAD_FUNCTION);
         return TRUE;
     }
@@ -1144,6 +1157,13 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                     {
                         SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
                     }
+                    /* Issue Q: Does not set SRB transfer length to 0.  This may
+                     * give the caller the false impression that some data was
+                     * written before the error ocurred.  This could in theory
+                     * lead to data corruption (with the caller not re-writing
+                     * the data that apparently was already written), but in
+                     * practice, the whole device is read-only anyway, so there
+                     * should be no impact. */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SrbStatus);
                     return TRUE;
                 }
@@ -1154,6 +1174,9 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                 SRB_SET_SRB_STATUS(Srb, SRB_STATUS_PENDING);
                 if (!RhelDoReadWrite(DeviceExtension, (PSRB_TYPE)Srb))
                 {
+                    /* Maybe issue Q: Leaves the SRB transfer length as-is.
+                     * Should be correct, because STATUS_BUSY should prompt a
+                     * complete retry from Windows, but not 100 % sure. */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BUSY);
                 }
                 return TRUE;
@@ -1203,6 +1226,8 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                 SRB_SET_SRB_STATUS(Srb, SRB_STATUS_PENDING);
                 if (!RhelDoFlush(DeviceExtension, (PSRB_TYPE)Srb, FALSE, FALSE))
                 {
+                    /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+                     * assuming these requests have no data anyway. */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_ERROR);
                 }
                 return TRUE;
@@ -1213,6 +1238,9 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                 if (!RhelDoUnMap(DeviceExtension, (PSRB_TYPE)Srb))
                 {
                     RhelDbgPrint(TRACE_LEVEL_ERROR, "RhelDoUnMap failed.\n");
+                    /* Issue Q: Not setting the transfer length to 0 may give
+                     * the caller the impression that the request was partially
+                     * successful. */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_ERROR);
                 }
                 return TRUE;
@@ -1231,6 +1259,10 @@ VirtIoStartIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                  Srb,
                  SRB_FUNCTION(Srb),
                  cdb->CDB6GENERIC.OperationCode);
+    /* wrt issue Q (not setting SRB transfer length to 0): Note that the
+     * transfer length is set to 0 here, even though INVALID_REQUEST should
+     * itself indicate a completely fatal error with no data transfer
+     * possible. */
     SRB_SET_DATA_TRANSFER_LENGTH(Srb, 0);
     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_INVALID_REQUEST);
     return TRUE;
@@ -1445,6 +1477,11 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
     }
     if (adaptExt->stopped == TRUE)
     {
+        /* Issue Q: Does not set SRB transfer length to 0 (but is done above).
+         * The caller may take this to mean the request was aborted after
+         * having transferred some data successfully, i.e. that it does not
+         * need to transfer that part of the data again. Could lead to data
+         * corruption. */
         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_ABORTED);
         return FALSE;
     }
@@ -1511,6 +1548,8 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                      " SRB_STATUS_BAD_SRB_BLOCK_LENGTH lba = %llu lastLBA= %llu\n",
                      lba,
                      adaptExt->lastLBA);
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this status code indicates a completely fatal error */
         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         return FALSE;
     }
@@ -1522,6 +1561,8 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                      lba,
                      adaptExt->lastLBA,
                      blocks);
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this status code indicates a completely fatal error */
         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         return FALSE;
     }
@@ -1530,6 +1571,8 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
     if (!sgList)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR, " no SGL\n");
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this status code indicates a completely fatal error */
         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BAD_FUNCTION);
         return FALSE;
     }
@@ -1553,6 +1596,9 @@ VirtIoBuildIo(IN PVOID DeviceExtension, IN PSCSI_REQUEST_BLOCK Srb)
                 if (sgElement > adaptExt->info.seg_max)
                 {
                     RhelDbgPrint(TRACE_LEVEL_ERROR, " wrong SGL, the numer of elements or the size is wrong\n");
+                    /* wrt issue Q (not setting SRB transfer length to 0):
+                     * Probably fine, this status code indicates a completely
+                     * fatal error */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
                     return FALSE;
                 }
@@ -1663,6 +1709,8 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
     if (!cdb)
     {
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this path seems to be just a safeguard against Windows bugs. */
         return SRB_STATUS_ERROR;
     }
 
@@ -1722,6 +1770,10 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
             if (!RhelGetSerialNumber(DeviceExtension, Srb))
             {
                 RhelDbgPrint(TRACE_LEVEL_ERROR, "RhelGetSerialNumber failed.\n");
+                /* Issue Q: Does not set SRB transfer length to 0.  It does not
+                 * make sense to have partial INQUIRY data, so seeing any error
+                 * should make the caller discard the whole buffer anyway, so
+                 * there probably is no impact. */
                 return SRB_STATUS_ERROR;
             }
             return SRB_STATUS_PENDING;
@@ -1738,6 +1790,8 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
         else
         {
             RhelDbgPrint(TRACE_LEVEL_ERROR, "RhelGetSerialNumber invalid dataLen = %d.\n", dataLen);
+            /* wrt issue Q (SRB transfer length): Probably fine, this return
+             * code indicates a completely fatal error. */
             return SRB_STATUS_INVALID_REQUEST;
         }
     }
@@ -1769,6 +1823,10 @@ RhelScsiGetInquiryData(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
             if (!RhelGetSerialNumber(DeviceExtension, Srb))
             {
                 RhelDbgPrint(TRACE_LEVEL_ERROR, "RhelGetSerialNumber failed.\n");
+                /* Issue Q: Does not set SRB transfer length to 0.  It does not
+                 * make sense to have partial INQUIRY data, so seeing any error
+                 * should make the caller discard the whole buffer anyway, so
+                 * there probably is no impact. */
                 return SRB_STATUS_ERROR;
             }
             return SRB_STATUS_PENDING;
@@ -1911,6 +1969,8 @@ RhelScsiGetModeSense(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
     if (!cdb)
     {
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this path seems to be just a safeguard against Windows bugs. */
         return SRB_STATUS_ERROR;
     }
 
@@ -1919,6 +1979,10 @@ RhelScsiGetModeSense(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
         if (sizeof(MODE_PARAMETER_HEADER) > ModeSenseDataLen)
         {
+            /* Issue Q: Does not set SRB transfer length to 0.  It does not
+             * make sense to have partial SENSE data, so seeing any error
+             * should make the caller discard the whole buffer anyway, so there
+             * probably is no impact. */
             SrbStatus = SRB_STATUS_ERROR;
             return SrbStatus;
         }
@@ -1959,6 +2023,10 @@ RhelScsiGetModeSense(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
         if (sizeof(MODE_PARAMETER_HEADER) > ModeSenseDataLen)
         {
+            /* Issue Q: Does not set SRB transfer length to 0.  It does not
+             * make sense to have partial SENSE data, so seeing any error
+             * should make the caller discard the whole buffer anyway, so there
+             * probably is no impact. */
             SrbStatus = SRB_STATUS_ERROR;
             return SrbStatus;
         }
@@ -1993,6 +2061,8 @@ RhelScsiGetModeSense(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
     }
     else
     {
+        /* wrt issue Q (SRB transfer length): Probably fine, this return code
+         * indicates a completely fatal error. */
         SrbStatus = SRB_STATUS_INVALID_REQUEST;
     }
 
@@ -2015,6 +2085,8 @@ RhelScsiGetCapacity(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
     if (!cdb)
     {
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this path seems to be just a safeguard against Windows bugs. */
         return SRB_STATUS_ERROR;
     }
 
@@ -2090,6 +2162,8 @@ RhelScsiVerify(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
 
     if (!cdb)
     {
+        /* wrt issue Q (not setting SRB transfer length to 0): Probably fine,
+         * this path seems to be just a safeguard against Windows bugs. */
         return SRB_STATUS_ERROR;
     }
 
@@ -2098,6 +2172,8 @@ RhelScsiVerify(IN PVOID DeviceExtension, IN OUT PSRB_TYPE Srb)
     if ((lba + blocks) > adaptExt->lastLBA)
     {
         RhelDbgPrint(TRACE_LEVEL_ERROR, " lba = %llu lastLBA= %llu blocks = %lu\n", lba, adaptExt->lastLBA, blocks);
+        /* wrt issue Q (SRB transfer length): Probably fine, this return code
+         * indicates a completely fatal error. */
         SrbStatus = SRB_STATUS_INVALID_REQUEST;
     }
     return SrbStatus;
@@ -2112,6 +2188,9 @@ VOID CompleteSRB(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
     StorPortNotification(RequestComplete, DeviceExtension, Srb);
 }
 
+/* Issue Q: I don't think we ever partially transfer data in case of error, so
+ * maybe this function should check if `status != SRB_STATUS_SUCCESS`, and if
+ * so, set the transfer length to 0, so the callers don't all have to do it. */
 VOID CompleteRequestWithStatus(IN PVOID DeviceExtension, IN PSRB_TYPE Srb, IN UCHAR status)
 {
     PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)DeviceExtension;
@@ -2368,12 +2447,22 @@ VOID VioStorCompleteRequest(IN PVOID DeviceExtension, IN ULONG MessageID, IN BOO
                     SRB_SET_SRB_STATUS(Srb, SRB_STATUS_PENDING);
                     if (!RhelDoFlush(DeviceExtension, Srb, TRUE, bIsr))
                     {
+                        /* Issue Q: Does not set SRB transfer length to 0.
+                         * This may give the caller the false impression that
+                         * some data was written before the error ocurred.
+                         * This could lead to corruption if the that part of
+                         * the data is then excluded from a retry. */
                         CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, SRB_STATUS_ERROR);
                     }
                     srbExt->fua = FALSE;
                 }
                 else
                 {
+                    /* Issue Q: Does not set the SRB transfer length to 0 on
+                     * error. Callers may take this to mean the request
+                     * encountered an error after having transferred some data
+                     * successfully, i.e. that they don't need to transfer that
+                     * part of the data again. Could lead to data corruption. */
                     CompleteRequestWithStatus(DeviceExtension, (PSRB_TYPE)Srb, srbStatus);
                 }
             }
@@ -2447,6 +2536,8 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
     if (dataLen < (sizeof(SRB_IO_CONTROL) + sizeof(FIRMWARE_REQUEST_BLOCK)))
     {
         srbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
+        /* wrt issue Q (SRB transfer length): Probably fine, this return code
+         * indicates a completely fatal error */
         srbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
         RhelDbgPrint(TRACE_LEVEL_ERROR, " FirmwareRequest Bad Block Length  %ul\n", dataLen);
         return srbStatus;
@@ -2507,6 +2598,8 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                                  " Wrong Version %ul or Size %ul\n",
                                  firmwareInfo->Version,
                                  firmwareInfo->Size);
+                    /* wrt issue Q (SRB transfer length): Probably fine, this
+                     * return code indicates a completely fatal error */
                     srbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
                     srbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
                 }
@@ -2533,6 +2626,8 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                                  firmwareDwnld->Version,
                                  firmwareDwnld->Size);
                     srbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
+                    /* wrt issue Q (SRB transfer length): Probably fine, this
+                     * return code indicates a completely fatal error */
                     srbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
                 }
             }
@@ -2556,6 +2651,8 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
                                  firmwareActivate->Version,
                                  firmwareActivate->Size);
                     srbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
+                    /* wrt issue Q (SRB transfer length): Probably fine, this
+                     * return code indicates a completely fatal error */
                     srbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
                 }
                 RhelDbgPrint(TRACE_LEVEL_INFORMATION, " FIRMWARE_FUNCTION_ACTIVATE \n");
@@ -2563,6 +2660,9 @@ UCHAR FirmwareRequest(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
             break;
         default:
             RhelDbgPrint(TRACE_LEVEL_ERROR, " Unsupported Function %ul\n", firmwareRequest->Function);
+            /* wrt issue Q (SRB transfer length): Probably fine, this return
+             * code indicates a completely fatal error.  Do note, though, that
+             * vioscsi does reset the transfer length to 0 here. */
             srbStatus = SRB_STATUS_INVALID_REQUEST;
             break;
     }
