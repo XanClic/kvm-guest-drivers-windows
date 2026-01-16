@@ -345,6 +345,11 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
      * processing_srbs[] pointers, causing memory corruption.
      * Possible fix: Add bounds check: if (BlockDescrCount > 16) return error?
      */
+    /* Issue T: blk_discard is now owned by this request until it is done, but
+     * there is only one instance per device.  Unless we prevent them,
+     * concurrent UNMAP requests may break each other, causing data corruption
+     * by writing to the discard parameters while the device reads them, thus
+     * potentially causing random areas to be discarded. */
     for (i = 0; i < BlockDescrCount; i++)
     {
         ULONGLONG blockDescrStartingLba;
