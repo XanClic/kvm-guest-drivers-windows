@@ -452,6 +452,7 @@ static bool virtqueue_enable_cb_delayed_packed(struct virtqueue *_vq)
 static BOOLEAN virtqueue_is_interrupt_enabled_packed(struct virtqueue *_vq)
 {
     struct virtqueue_packed *vq = packedvq(_vq);
+    /* Issue U: Should be negated (no impact, as split vq is the default) */
     return vq->packed.event_flags_shadow & VRING_PACKED_EVENT_FLAG_DISABLE;
 }
 
