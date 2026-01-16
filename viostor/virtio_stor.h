@@ -262,6 +262,7 @@ typedef struct _ADAPTER_EXTENSION
     ULONG num_affinity;
     STOR_ADDR_BTL8 device_address;
     /* Issue ii): only 16 entries but MAX_DISCARD_SEGMENTS is 256. */
+    /* Issue S: Assumed to be physically continguous, but not ensured */
     blk_discard_write_zeroes blk_discard[16];
     /* Issue C: SRBs leaked if VirtIoHwReinitialize fails (reliability, not BSOD) */
     REQUEST_LIST processing_srbs[MAX_CPU];

@@ -381,6 +381,9 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
 
     srbExt->sg[0].physAddr = StorPortGetPhysicalAddress(DeviceExtension, NULL, &srbExt->vbr.out_hdr, &fragLen);
     srbExt->sg[0].length = sizeof(srbExt->vbr.out_hdr);
+    /* Issue S: Does not check for physical continuity.  If not physically
+     * contiguous, this may have the device read wrong data, leading to data
+     * corruption. Also unclear whether this page is pinned in memory. */
     srbExt->sg[1].physAddr = MmGetPhysicalAddress(&adaptExt->blk_discard[0]);
     srbExt->sg[1].length = sizeof(blk_discard_write_zeroes) * BlockDescrCount;
     srbExt->sg[2].physAddr = StorPortGetPhysicalAddress(DeviceExtension, NULL, &srbExt->vbr.status, &fragLen);
