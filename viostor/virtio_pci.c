@@ -258,6 +258,9 @@ static void vdev_sleep(void *context, unsigned int msecs)
     UNREFERENCED_PARAMETER(context);
 
     /* We can't really sleep in a storage miniport so we just busy wait. */
+    /* Issue V: MS documentation says this must be less than a full millisecond,
+     * but our granularity is milliseconds.  Impact depends on whether Windows
+     * chooses to enforce the contract. */
     StorPortStallExecution(1000 * msecs);
 }
 

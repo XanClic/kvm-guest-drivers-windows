@@ -188,6 +188,10 @@ static void vio_modern_reset(VirtIODevice *vdev)
             DPrintf(0, ("PCI config space is not readable, probably the device is removed\n"));
             break;
         }
+        /* Issue V: This is generally implemented via StorPortStallExecution()
+         * or KeStallExecutionProcessor(), both of which seem to be busy loops.
+         * That does not seem better than to just keep reading the status byte
+         * without such a stall. */
         vdev_sleep(vdev, 1);
     }
 }
