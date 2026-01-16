@@ -284,6 +284,9 @@ RhelDoReadWrite(PVOID DeviceExtension, PSRB_TYPE Srb)
     return result;
 }
 
+/* Issue R: In case of error, this function sets the SRB status, but the caller
+ * will always overwrite it with SRB_STATUS_ERROR. No impact, other than losing
+ * some information on what went wrong. */
 BOOLEAN
 RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
 {
@@ -407,6 +410,10 @@ RhelDoUnMap(IN PVOID DeviceExtension, IN PSRB_TYPE Srb)
     /* Issue A (reliability): read without barrier, may see stale value from Reset */
     if (adaptExt->reset_in_progress)
     {
+        /* Related to issue R: We should return `FALSE` here, but then the
+         * caller would overwrite the status code.  This seems like a
+         * work-around that indicates this function really should return the
+         * SRB status. */
         SRB_SET_DATA_TRANSFER_LENGTH(Srb, 0);
         CompleteRequestWithStatus(DeviceExtension, Srb, SRB_STATUS_BUS_RESET);
         return TRUE;
